@@ -6,7 +6,13 @@ use File::Basename;
 
 my $debug=0;
 
-# Output format for pipeline processing:
+# Standard input:
+# topic-vector
+# source-sentence
+# ...
+#
+
+# Standard output:
 #  topic-vector
 #  src-phrase
 #  ....
@@ -18,9 +24,6 @@ my $debug=0;
 #  src-phrase
 #  \newline
 
-#the file is created after reading from standard input two lines:
-#topic-vector
-#source sentence
 
 my ($vec)=();   #real vectors start from position 1
 my ($src,@src)=();
@@ -38,5 +41,3 @@ while (($vec=<STDIN>) && chop($src=<STDIN>)){
     print "\n"; #final newline
 
 }
-
-
