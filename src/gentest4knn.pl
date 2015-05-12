@@ -35,5 +35,8 @@ while (($vec=<STDIN>) && chop($src=<STDIN>)){
         print "$src[$i-1] $src[$i]\n" if !defined($set{"$src[$i-1] $src[$i]"});
         $set{"$src[$i]"}++;$set{"$src[$i-1] $src[$i]"}++;
     }
+    print "\n"; #final newline
+
 }
 
+
