@@ -6,25 +6,36 @@ use File::Basename;
 
 my $debug=0;
 
-#training data will have the following structure:
-#  #topics
-#  src-phrase  #translations
+#Input:
+#File with phrase-pairs extracted from training data
+# src-phrase ||| trg-phrase ||| segment-id
+# ...
+# ...
+# file is sorted by src-phrase
+#
+#File with topic vectors
+# t1 t2 ... tn
+# ....
+# the n-th line contains vector of segment n
+
+#Output:
+#  size-of-topic-vectors
+#  src-phrase  number-of-translations
 #  trg-phrase  topic-vector
 #  ....
-#  trg-phrase topic-vector
-#  src phrase  #translations
+#  trg-phrase  topic-vector
+#  src phrase  number-of-translations
 #  trg-phrase  topic-vector
 #  ....
 
-#the file is created from the phrase pairs file and the topic distributions
-#we will also create dictionaries for source and target phrases (assumption
-#we will only work with short phrases)
 
-my(@VOC,%VOC,$MAXCODE)=();
 my (@VEC)=("DUMMY"); #real vectors start from position 1
 
-#We need probably to filter out some phrase pairs before processing
+#We filter out phrase pairs with low frequency
 #Phrase collection must be sorted wrt source phrase
+
+my ($minfreq)=5;      #skip src phrases that appear less than N times
+my ($maxdocfreq)=0.05; #skip src phrases that appear in X% of the lines
 
 sub loadvectors(){
     my ($file)=@_;
@@ -36,22 +47,6 @@ sub loadvectors(){
     close(VECFILE);
     printf STDERR "done (". $#VEC.")\n";
    
-}
-
-sub Encode(){
-    my ($word) = @_;
-    my ($code)=();
-    if (!defined($code=$VOC{$word})){
-        $code=($VOC{$word}=$MAXCODE++);
-        $VOC[$code]=$word;
-    }
-    return $code;
-}
-
-sub Decode(){
-    my ($code) = @_;
-    die "decode: code $code is out of boundaries [0,$MAXCODE)\n" if ($code < 0 || $code >= $MAXCODE);
-    return $VOC[$code];
 }
 
 
@@ -70,18 +65,29 @@ open(KNNFILE,">$knnfile") || die "Cannot open knn file $phfile\n";
 my ($src,$trg,$align,$seg)=();
 
 
-
 #First pass: count translations for each source phrase
-printf "Pass 1: count translations of each source phrase\n";
-my %count=();
+printf STDERR "Pass 1: count translations of each source phrase\n";
+my (%count,%count2,%doclist,%dcount,$totdoc)=();
 open(PHFILE,"<$phfile") || die "Cannot read from file $phfile\n";
 while (chop($_=<PHFILE>)){
     ($src,$trg,$align,$seg)=split(/ \|\|\| /,$_);
     $count{"$src"}++;
+    ${$count2{"$src"}}{"$seg"}++;
+    $doclist{"$seg"}++;
 }
 close(PHFILE);
 
-printf "Pass 2: cgenerate KNN training file\n";
+#compute document frequency for each src phrase
+
+foreach $src (keys %count){
+    $dcount{"$src"}=scalar (keys %{$count2{"$src"}});
+    #printf  "$src ->".$dcount{"$src"}."\n";
+}
+$totdoc=scalar (keys %doclist);
+
+
+printf STDERR "Total of segments is: $totdoc\n";
+printf STDERR "Pass 2: generate KNN training file\n";
 
 #write # topics
 my $n=split(/ +/,$VEC[1]);
@@ -90,11 +96,15 @@ printf KNNFILE "$n\n";
 my $curphrase="";
 open(PHFILE,"<$phfile") || die "Cannot read from file $phfile\n";
 while (chop($_=<PHFILE>)){
-    print "$_\n";
+
     ($src,$trg,$align,$seg)=split(/ \|\|\| /,$_);
-    next if $count{$src}<5;
+    
+    #printf (STDERR "Skip1: $src\n"),
+    next if $count{$src} <  $minfreq; #skip unfrequent phrases
+    #printf (STDERR "Skip2: $src\n"),
+    next if $dcount{$src}/$totdoc> $maxdocfreq; #skip phrases that occurr in too many documents
+    
     if ($src ne $curphrase){
-        print "-$src-\n";
         printf KNNFILE $src." ||| ".$count{"$src"}."\n";
         $curphrase=$src;
     }
