@@ -17,6 +17,7 @@ def main():
                         help="returns all neighbors within the radius passed as parameter.")
     parser.add_argument("-k", "--k_neighbors", type=int, default=5,
                         help="returns the k-nearest neighbors to the test points.")
+    parser.add_argument("--debug", action="store_true", default=False, help="outputs debug mode.")
 
     args = parser.parse_args()
 
@@ -26,14 +27,19 @@ def main():
     words = dict["words"]
 
     input_file = codecs.open(args.test_data, "r", "utf-8")
+    n_topics = int(input_file.readline())
     topics = None
     for line in input_file:
         sline = line.strip()
         if sline == "":
             sys.stdout.write("\n")
+            # pass
+            # if args.debug:
+            #     sys.stdout.write("\n")
+
         cols = sline.split(" ")
         src_word = None
-        if len(cols) == 250:
+        if len(cols) == n_topics:
             topics = np.array(map(float, cols))
         else:
             src_word = sline
@@ -53,23 +59,23 @@ def main():
                 else:
                     dist, neighs = src_model.kneighbors(topics, n_neighbors=src_model._fit_X.shape[0], return_distance=True)
 
-            # print "[%s]" % src_word, #[words[src_word][i] for i in neighs]
-            # print type(neighs)
-
             possible_words = words[src_word]
             # print len(possible_words)
             # print neighs.ravel().shape
             # print dist.ravel().shape
 
-            sys.stdout.write("%s |||" % src_word)
+            sys.stdout.write("%s |||" % src_word.strip())
             for i, word_pos in enumerate(neighs.ravel()):
+                new_segment = False
+
                 # print pos
                 # print "\t[%s]" % possible_words[pos]
                 sys.stdout.write(" %s || %2.4f " % (possible_words[word_pos], dist.ravel()[i]))
-                if word_pos == neighs.ravel()[-1]:
-                    sys.stdout.write("|||| ")
-                else:
+                if word_pos != neighs.ravel()[-1]:
                     sys.stdout.write("||")
+                else:
+                    sys.stdout.write("|||| ")
+
 
         # else:
         #     print "%s |||| None" % src_word
