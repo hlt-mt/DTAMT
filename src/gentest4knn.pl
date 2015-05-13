@@ -13,6 +13,7 @@ my $debug=0;
 #
 
 # Standard output:
+#  size-of-topic-vectors
 #  topic-vector
 #  src-phrase
 #  ....
@@ -28,7 +29,10 @@ my $debug=0;
 my ($vec)=();   #real vectors start from position 1
 my ($src,@src)=();
 my (%set)=();
+my $printheader=1;
+
 while (($vec=<STDIN>) && chop($src=<STDIN>)){
+    print (scalar split(/ /,$vec)."\n"),$printheader="" if $printheader;
     print $vec;
     @src=split(/ /,$src);    
     %set=();
