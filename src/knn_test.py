@@ -2,6 +2,7 @@ import argparse
 import joblib
 import codecs
 import numpy as np
+import sys
 
 __author__ = 'jgcdesouza'
 
@@ -16,8 +17,6 @@ def main():
                         help="returns all neighbors within the radius passed as parameter.")
     parser.add_argument("-k", "--k_neighbors", type=int, default=5,
                         help="returns the k-nearest neighbors to the test points.")
-    parser.add_argument("--distance", action="store_true", default=False,
-                        help="whether or not to return distances with the nearest neighbors.")
 
     args = parser.parse_args()
 
@@ -27,11 +26,21 @@ def main():
     words = dict["words"]
 
     input_file = codecs.open(args.test_data, "r", "utf-8")
+    topics = None
     for line in input_file:
         sline = line.strip()
-        tok = sline.split(" ||| ")
-        src_word = tok[0]
-        topics = np.array(map(float, tok[1].split(" ")))
+        if sline == "":
+            sys.stdout.write("\n")
+        cols = sline.split(" ")
+        src_word = None
+        if len(cols) == 250:
+            topics = np.array(map(float, cols))
+        else:
+            src_word = sline
+
+        if topics is None:
+            sys.stderr.write("error: topic distribution not found for phrase [%s]" % src_word)
+            sys.exit(1)
 
         src_model = source_models.get(src_word, None)
 
@@ -40,20 +49,30 @@ def main():
                 neighs = src_model.radius_neighbors(topics, radius=args.radius, return_distance=args.distance)
             else:
                 if src_model._fit_X.shape[0] > args.k_neighbors:
-                    neighs = src_model.kneighbors(topics, n_neighbors=args.k_neighbors, return_distance=args.distance)
+                    dist, neighs = src_model.kneighbors(topics, n_neighbors=args.k_neighbors, return_distance=True)
                 else:
-                    neighs = src_model.kneighbors(topics, n_neighbors=src_model._fit_X.shape[0], return_distance=args.distance)
+                    dist, neighs = src_model.kneighbors(topics, n_neighbors=src_model._fit_X.shape[0], return_distance=True)
 
-            print "[%s]" % src_word, #[words[src_word][i] for i in neighs]
-            print type(neighs)
+            # print "[%s]" % src_word, #[words[src_word][i] for i in neighs]
+            # print type(neighs)
 
-            for pos in neighs.ravel():
+            possible_words = words[src_word]
+            # print len(possible_words)
+            # print neighs.ravel().shape
+            # print dist.ravel().shape
+
+            sys.stdout.write("%s |||" % src_word)
+            for i, word_pos in enumerate(neighs.ravel()):
                 # print pos
-                possible_words = words[src_word]
-                print "\t[%s]" % possible_words[pos]
-        else:
-            print "[%s]\tNULL" % src_word
+                # print "\t[%s]" % possible_words[pos]
+                sys.stdout.write(" %s || %2.4f " % (possible_words[word_pos], dist.ravel()[i]))
+                if word_pos == neighs.ravel()[-1]:
+                    sys.stdout.write("|||| ")
+                else:
+                    sys.stdout.write("||")
 
+        # else:
+        #     print "%s |||| None" % src_word
 
 if __name__ == "__main__":
     main()
