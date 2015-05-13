@@ -28,14 +28,41 @@ my $debug=0;
 #  trg-phrase  topic-vector
 #  ....
 
+my ($phfile,$vecfile,$knnfile)=();
+my ($minfreq)=5;      #skip src phrases that appear less than N times
+my ($maxdocfreq)=0.05; #skip src phrases that appear in X% of the lines
+my ($help)=();
+
+&GetOptions(
+    'pf=s' => \$phfile,
+    'vf=s' => \$vecfile,
+    'of=s'=>\$knnfile,
+    'minfreq=s'=>\$minfreq,
+    'maxdocfreq' => \$maxdocfreq,
+    'h|help' => \$help,);
+
+if ($help || !$phfile || !$vecfile || !$knnfile) {
+    my $cmnd = basename($0);
+    print "\n$cmnd - generate training set for KNN algorithm\n",
+    "\nUSAGE:\n",
+    "       $cmnd [options]\n",
+    "\nOPTIONS:\n",
+    "       --pf  <string>        phrase-pair file including segment identifiers \n",
+    "       --vf <string>         topic vector file \n",
+    "       --of <string>         output file \n",
+    "       --minfreq <count>     minimum corpus frequency for words (default 5)\n",
+    "       --maxdocfreq <fraction>  maximum document frequency of words (default 0.1)\n",
+    "       -h, --help            (optional) print these instructions\n",
+    "\n";
+    
+    exit(1);
+}
 
 my (@VEC)=("DUMMY"); #real vectors start from position 1
 
 #We filter out phrase pairs with low frequency
 #Phrase collection must be sorted wrt source phrase
 
-my ($minfreq)=5;      #skip src phrases that appear less than N times
-my ($maxdocfreq)=0.05; #skip src phrases that appear in X% of the lines
 
 sub loadvectors(){
     my ($file)=@_;
@@ -50,9 +77,9 @@ sub loadvectors(){
 }
 
 
+
 #####
 
-my ($phfile,$vecfile,$knnfile)=(@ARGV);
 
 
 &loadvectors($vecfile);
@@ -60,20 +87,21 @@ my ($phfile,$vecfile,$knnfile)=(@ARGV);
 #check that knn file does not exist
 die "cannot overwrite $knnfile\n" if -e $knnfile;
 open(KNNFILE,">$knnfile") || die "Cannot open knn file $phfile\n";
-
-
 my ($src,$trg,$align,$seg)=();
 
 
 #First pass: count translations for each source phrase
 printf STDERR "Pass 1: count translations of each source phrase\n";
-my (%count,%count2,%doclist,%dcount,$totdoc)=();
+my (%count,%count2,%doclist,%dcount,$totdoc,$totph)=();
 open(PHFILE,"<$phfile") || die "Cannot read from file $phfile\n";
 while (chop($_=<PHFILE>)){
     ($src,$trg,$align,$seg)=split(/ \|\|\| /,$_);
+    
     $count{"$src"}++;
     ${$count2{"$src"}}{"$seg"}++;
     $doclist{"$seg"}++;
+    
+    printf STDERR "." if (++$totph % 1000000)==0;
 }
 close(PHFILE);
 
@@ -95,8 +123,10 @@ my $n=split(/ +/,$VEC[1]);
 printf KNNFILE "$n\n";
 my $curphrase="";
 open(PHFILE,"<$phfile") || die "Cannot read from file $phfile\n";
+$totph=0;
 while (chop($_=<PHFILE>)){
-
+    
+    printf STDERR "." if (++$totph % 1000000)==0;
     ($src,$trg,$align,$seg)=split(/ \|\|\| /,$_);
     
     #printf (STDERR "Skip1: $src\n"),
@@ -105,10 +135,10 @@ while (chop($_=<PHFILE>)){
     next if $dcount{$src}/$totdoc> $maxdocfreq; #skip phrases that occurr in too many documents
     
     if ($src ne $curphrase){
-        printf KNNFILE $src." ||| ".$count{"$src"}."\n";
+        printf KNNFILE metaquote($src)." ||| ".$count{"$src"}."\n";
         $curphrase=$src;
     }
-    printf KNNFILE "$trg"." ||| ".$VEC[$seg]."\n";
+    printf KNNFILE metaquote($trg)." ||| ".$VEC[$seg]."\n";
     
 }
 close(PHFILE);
