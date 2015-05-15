@@ -28,15 +28,18 @@ my $debug=0;
 #  trg-phrase  topic-vector
 #  ....
 
-my ($phfile,$vecfile,$knnfile)=();
-my ($minfreq)=5;      #skip src phrases that appear less than N times
-my ($maxdocfreq)=0.05; #skip src phrases that appear in X% of the lines
+my ($phfile,$vecfile,$knnfile,$filterfile,$blacklistfile)=();
+my ($minfreq)=10;      #skip src phrases that appear less than N times
+my ($maxdocfreq)=1; #skip src phrases that appear in more X% of the lines
 my ($help)=();
+
 
 &GetOptions(
     'pf=s' => \$phfile,
     'vf=s' => \$vecfile,
     'of=s'=>\$knnfile,
+    'ff=s'=>\$filterfile,
+    'bf=s'=>\$blacklistfile,
     'minfreq=s'=>\$minfreq,
     'maxdocfreq' => \$maxdocfreq,
     'h|help' => \$help,);
@@ -50,28 +53,30 @@ if ($help || !$phfile || !$vecfile || !$knnfile) {
     "       --pf  <string>        phrase-pair file including segment identifiers \n",
     "       --vf <string>         topic vector file \n",
     "       --of <string>         output file \n",
-    "       --minfreq <count>     minimum corpus frequency for words (default 5)\n",
-    "       --maxdocfreq <fraction>  maximum document frequency of words (default 0.1)\n",
+    "       --ff <string>         filter file \n",
+    "       --bf <string>         blacklist file \n",
+    "       --minfreq <count>     minimum corpus frequency for words (default 10)\n",
+    "       --maxdocfreq <fraction>  maximum document relative frequency of words (default 1)\n",
     "       -h, --help            (optional) print these instructions\n",
     "\n";
     
     exit(1);
 }
 
-my (@VEC)=("DUMMY"); #real vectors start from position 1
+
 
 #We filter out phrase pairs with low frequency
 #Phrase collection must be sorted wrt source phrase
-
+my (@VEC)=("DUMMY"); #real vectors start from position 1
 
 sub loadvectors(){
     my ($file)=@_;
-    open(VECFILE,"<$file") || die "Cannot open $file\n";
+    open(FILE,"<$file") || open(FILE,"$file |") || die "Cannot open $file\n";
     printf STDERR "loading vectors ...";
-    while(chop($_=<VECFILE>)){
+    while(chop($_=<FILE>)){
         push(@VEC,$_);
     }
-    close(VECFILE);
+    close(FILE);
     printf STDERR "done (". $#VEC.")\n";
    
 }
@@ -79,29 +84,70 @@ sub loadvectors(){
 
 
 #####
+my (%filter)=();
+
+sub loadfilter(){
+    my ($file)=@_;
+    open(FILE,"<$file") || open(FILE,"$file |") || die "Cannot open $file\n";
+    printf STDERR "loading filter ...";
+    my ($src,@src)=();
+     while (chop($src=<FILE>)){
+        @src=split(/ /,$src);
+        $filter{"$src[0]"}++;
+        for (my $i=1;$i <= $#src; $i++){
+            $filter{"$src[$i]"}++;$filter{"$src[$i-1] $src[$i]"}++;
+        }
+    }
+    close(FILE);
+    printf STDERR "done\n";
+}
+#####
+my (%blacklist)=();
+
+sub loadblacklist(){
+    my ($file)=@_;
+    open(FILE,"<$file") || open(FILE,"$file |") || die "Cannot open $file\n";
+    printf STDERR "loading blacklist ...";
+    my ($src)=();
+    while (chop($src=<FILE>)){
+        $blacklist{"$src"}++;
+    }
+    close(FILE);
+    printf STDERR "done\n";
+}
 
 
-
-&loadvectors($vecfile);
 
 #check that knn file does not exist
 die "cannot overwrite $knnfile\n" if -e $knnfile;
-open(KNNFILE,">$knnfile") || die "Cannot open knn file $phfile\n";
-my ($src,$trg,$align,$seg)=();
 
+&loadvectors($vecfile);
+&loadblacklist($blacklistfile) if $blacklistfile;
+&loadfilter($filterfile) if $filterfile;
+
+
+#Open knnfile
+open(KNNFILE,">$knnfile") || die "Cannot open knn file $phfile\n";
+my ($src,$trg,$align,$seg,@src,@trg)=();
 
 #First pass: count translations for each source phrase
 printf STDERR "Pass 1: count translations of each source phrase\n";
 my (%count,%count2,%doclist,%dcount,$totdoc,$totph)=();
-open(PHFILE,"<$phfile") || die "Cannot read from file $phfile\n";
+open(PHFILE,"<$phfile") || open(PHFILE,"$phfile|") || die "Cannot read from file $phfile\n";
+
 while (chop($_=<PHFILE>)){
+    printf STDERR "." if (++$totph % 1000000)==0;
     ($src,$trg,$align,$seg)=split(/ \|\|\| /,$_);
-    
+    @src=split(/ /,$src); @trg=split(/ /,$trg);
+    next if $blacklistfile && (defined($blacklist{"$src[0]"}) || defined($blacklist{"$src[1]"}));
+    next if $filterfile && !defined($filter{"$src"});
+    #skip entries not containing real words wither in source or target
+    next if $blacklistfile && (!($src[0]=~/[a-zA-Z]{3,}/) || ($src[1] && !($src[1]=~/[a-zA-Z]{3,}/)) || ($src=~/\&[a-zA-Z]+;/));
+    next if $blacklistfile && (!($trg[0]=~/[a-zA-Z]{3,}/) || ($trg[1] && !($trg[1]=~/[a-zA-Z]{3,}/)) || ($trg=~/\&[a-zA-Z]+;/));
+
     $count{"$src"}++;
     ${$count2{"$src"}}{"$seg"}++;
     $doclist{"$seg"}++;
-    
-    printf STDERR "." if (++$totph % 1000000)==0;
 }
 close(PHFILE);
 
@@ -122,12 +168,18 @@ my $n=split(/ +/,$VEC[1]);
 
 printf KNNFILE "$n\n";
 my $curphrase="";
-open(PHFILE,"<$phfile") || die "Cannot read from file $phfile\n";
+open(PHFILE,"<$phfile") || open(PHFILE,"$phfile|") || die "Cannot read from file $phfile\n";
 $totph=0;
 while (chop($_=<PHFILE>)){
     
     printf STDERR "." if (++$totph % 1000000)==0;
     ($src,$trg,$align,$seg)=split(/ \|\|\| /,$_);
+    @src=split(/ /,$src); @trg=split(/ /,$trg);
+    next if $blacklistfile && (defined($blacklist{"$src[0]"}) || defined($blacklist{"$src[1]"}));
+    next if $filterfile && !defined($filter{"$src"});
+    #skip entries not containing real words wither in source or target
+    next if $blacklistfile && (!($src[0]=~/[a-zA-Z]{3,}/) || ($src[1] && !($src[1]=~/[a-zA-Z]{3,}/)) || ($src=~/\&[a-zA-Z]+;/));
+    next if $blacklistfile && (!($trg[0]=~/[a-zA-Z]{3,}/) || ($trg[1] && !($trg[1]=~/[a-zA-Z]{3,}/)) || ($trg=~/\&[a-zA-Z]+;/));
     
     #printf (STDERR "Skip1: $src\n"),
     next if $count{$src} <  $minfreq; #skip unfrequent phrases
@@ -135,10 +187,10 @@ while (chop($_=<PHFILE>)){
     next if $dcount{$src}/$totdoc> $maxdocfreq; #skip phrases that occurr in too many documents
     
     if ($src ne $curphrase){
-        printf KNNFILE metaquote($src)." ||| ".$count{"$src"}."\n";
+        printf KNNFILE "%s" , $src." ||| ".$count{"$src"}."\n";
         $curphrase=$src;
     }
-    printf KNNFILE metaquote($trg)." ||| ".$VEC[$seg]."\n";
+    printf KNNFILE "%s" , $trg." ||| ".$VEC[$seg]."\n";
     
 }
 close(PHFILE);
