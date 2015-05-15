@@ -7,15 +7,15 @@ from sklearn.neighbors import NearestNeighbors
 from collections import Counter
 
 
-
 __author__ = 'jgcdesouza'
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Trains a KNN model.')
+    parser = argparse.ArgumentParser(
+        description='Trains a KNN model. Models are fitted with n_neighbors equal to the number of unique translation for each source phrase.')
     parser.add_argument("training_data", help="path to input training data file.")
     parser.add_argument("-m", "--model", help="path to save the output KNN model.")
-    parser.add_argument("-n", "--n_neighbors", type=int, default=3, help="number of neighbors. Default is 3.")
+    # parser.add_argument("-n", "--n_neighbors", type=int, default=3, help="number of neighbors. Default is 3.")
     parser.add_argument("-r", "--radius", type=float, default=1.0,
                         help="radius of the nearest neighbor mode. Default is 1.0.")
 
@@ -31,7 +31,6 @@ def main():
     src_trn_data = {}
     src_trn_words = {}
 
-    tgt_no = 0
     line_no = 0
     src_word_trn = []
     tgt_words_list = []
@@ -39,16 +38,20 @@ def main():
         line_no += 1
         sline = line.strip()
         field = sline.split(" ||| ")
+        ## if the input file does not contain two columns after breaking on |||, there is a problem in the input file.
         if len(field) != 2:
             sys.stderr.write("line %d: ill-formed line (different than two tokens)" % line_no)
             sys.exit(1)
 
         surface_word = field[0]
         value = field[1].strip().split(" ")
+
+        ## if the second column does not contain at least one token, there is a problem in the input file.
         if len(value) < 1:
             sys.stderr.write("line %d: ill-formed line (values column doesn't contain topics or entries no." % line_no)
             sys.exit(2)
 
+        ## if there is only one token, it represents the number of translations under a given source word.
         if len(value) == 1:
             # gets the number of entries
             tgt_no = int(value[0])
@@ -63,7 +66,8 @@ def main():
             src_word_trn = []
             tgt_words_list = []
 
-        if len(value) > 1:
+        ## else, if there is more than one token, this is the distribution of topics
+        elif len(value) > 1:
             topic_dist = np.array(map(float, value))
             src_word_trn.append(topic_dist)
             tgt_words_list.append(surface_word)
