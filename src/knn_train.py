@@ -98,41 +98,6 @@ def main():
         d = {"words": src_phr_trans, "models": src_phr_models}
         joblib.dump(d, args.model)
 
-    #         print "[%s] %d" % (surface_word, tgt_no)
-    #
-    #         if seen_data:
-    #             # assigns list of topic distributions to corresponding entry of source word
-    #             src_trn_data[surface_word] = src_word_trn
-    #             # assigns list of tgt words to corresponding entry of source word
-    #             src_trn_words[surface_word] = tgt_words_list
-    #             print tgt_words_list
-    #             # resets lists
-    #             src_word_trn = []
-    #             tgt_words_list = []
-    #             seen_data = False
-    #
-    #     ## else, if there is more than one token, this is the distribution of topics
-    #     elif len(value) > 1:
-    #         topic_dist = np.array(map(float, value))
-    #         src_word_trn.append(topic_dist)
-    #         tgt_words_list.append(surface_word)
-    #         seen_data = True
-    #
-    # src_models = {}
-    # ## populating data structures
-    # for surface, data in src_trn_data.items():
-    #     words = src_trn_words[surface]
-    #     if len(data) == 0:
-    #         continue
-    #     counts = Counter(words)
-    #
-    #     print "Processing [%s], (unique words = %d)" % (surface, len(counts))
-    #     X = np.row_stack(data)
-    #     neigh_est = NearestNeighbors(n_neighbors=len(counts), radius=args.radius, algorithm="auto",
-    #                                  metric='minkowski', p=2).fit(X)
-    #     src_models[surface] = neigh_est
-    #
-
 
 if __name__ == "__main__":
     main()
