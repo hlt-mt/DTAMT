@@ -29,7 +29,7 @@ def main():
 
     args = parser.parse_args()
 
-    print "Reading input file %s..." % args.training_data
+    sys.stderr.write("Reading input file %s...\n" % args.training_data)
     training = codecs.open(args.training_data, "r", "utf-8")
 
     # reads the number of topics

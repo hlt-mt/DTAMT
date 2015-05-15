@@ -21,7 +21,7 @@ def main():
 
     args = parser.parse_args()
 
-    print "Reading binary file with trained models..."
+    sys.stderr.write("Reading binary file with trained models...\n")
     dict = joblib.load(args.model)
     source_models = dict["models"]
     words = dict["words"]
