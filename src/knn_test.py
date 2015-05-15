@@ -21,7 +21,7 @@ def main():
 
     args = parser.parse_args()
 
-    print "Reading binary file with trained models..."
+    sys.stderr.write("Reading binary file with trained models...\n")
     dict = joblib.load(args.model)
     source_models = dict["models"]
     words = dict["words"]
@@ -63,14 +63,14 @@ def main():
             # print len(possible_words)
             # print neighs.ravel().shape
             # print dist.ravel().shape
-
-            sys.stdout.write("%s |||" % src_word.strip())
+            src_word = src_word.strip().encode("utf-8")
+            sys.stdout.write("%s |||" % src_word)
             for i, word_pos in enumerate(neighs.ravel()):
-                new_segment = False
 
-                # print pos
-                # print "\t[%s]" % possible_words[pos]
-                sys.stdout.write(" %s || %2.4f " % (possible_words[word_pos], dist.ravel()[i]))
+                possible_translation = possible_words[word_pos]
+                possible_translation = possible_translation.encode("utf-8")
+                sys.stdout.write(" %s || %2.4f " % (possible_translation, dist.ravel()[i]))
+
                 if word_pos != neighs.ravel()[-1]:
                     sys.stdout.write("||")
                 else:
