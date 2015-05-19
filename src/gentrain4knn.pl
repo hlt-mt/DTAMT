@@ -117,7 +117,6 @@ sub loadblacklist(){
 }
 
 
-
 #check that knn file does not exist
 die "cannot overwrite $knnfile\n" if -e $knnfile;
 
@@ -125,79 +124,68 @@ die "cannot overwrite $knnfile\n" if -e $knnfile;
 &loadblacklist($blacklistfile) if $blacklistfile;
 &loadfilter($filterfile) if $filterfile;
 
+#open file of phrase-pairs
+open(PHFILE,"< $phfile") || open(PHFILE,"$phfile|") || die "Cannot read from file $phfile\n";
 
 #Open knnfile
 open(KNNFILE,">$knnfile") || die "Cannot open knn file $phfile\n";
-my ($src,$trg,$align,$seg,@src,@trg)=();
+#Write size of topic vectors
+my $n=split(/ +/,$VEC[1]); printf KNNFILE "$n\n";
 
-#First pass: count translations for each source phrase
-printf STDERR "Pass 1: count translations of each source phrase\n";
-my (%count,%count2,%doclist,%dcount,$totdoc,$totph)=();
-open(PHFILE,"<$phfile") || open(PHFILE,"$phfile|") || die "Cannot read from file $phfile\n";
+my ($ln,$src,$trg,$align,$seg,@src,@trg)=();
 
-while (chop($_=<PHFILE>)){
+my ($count,$newsrc,@rest,$out,$totph)=();
+
+chop($ln=<PHFILE>); #read first line
+
+do{
     printf STDERR "." if (++$totph % 1000000)==0;
-    ($src,$trg,$align,$seg)=split(/ \|\|\| /,$_);
+    ($src,$trg,$align,$seg)=split(/ \|\|\| /,$ln);
+    
+    #start checks
+    
     @src=split(/ /,$src); @trg=split(/ /,$trg);
-    next if $blacklistfile && (defined($blacklist{"$src[0]"}) || defined($blacklist{"$src[1]"}));
-    next if $filterfile && !defined($filter{"$src"});
-    #skip entries not containing real words wither in source or target
-    next if $blacklistfile && (!($src[0]=~/[a-zA-Z]{3,}/) || ($src[1] && !($src[1]=~/[a-zA-Z]{3,}/)) || ($src=~/\&[a-zA-Z]+;/));
-    next if $blacklistfile && (!($trg[0]=~/[a-zA-Z]{3,}/) || ($trg[1] && !($trg[1]=~/[a-zA-Z]{3,}/)) || ($trg=~/\&[a-zA-Z]+;/));
-
-    $count{"$src"}++;
-    ${$count2{"$src"}}{"$seg"}++;
-    $doclist{"$seg"}++;
-}
-close(PHFILE);
-
-#compute document frequency for each src phrase
-
-foreach $src (keys %count){
-    $dcount{"$src"}=scalar (keys %{$count2{"$src"}});
-    #printf  "$src ->".$dcount{"$src"}."\n";
-}
-$totdoc=scalar (keys %doclist);
-
-
-printf STDERR "Total of segments is: $totdoc\n";
-printf STDERR "Pass 2: generate KNN training file\n";
-
-#write # topics
-my $n=split(/ +/,$VEC[1]);
-
-printf KNNFILE "$n\n";
-my $curphrase="";
-open(PHFILE,"<$phfile") || open(PHFILE,"$phfile|") || die "Cannot read from file $phfile\n";
-$totph=0;
-while (chop($_=<PHFILE>)){
     
-    printf STDERR "." if (++$totph % 1000000)==0;
-    ($src,$trg,$align,$seg)=split(/ \|\|\| /,$_);
-    @src=split(/ /,$src); @trg=split(/ /,$trg);
-    next if $blacklistfile && (defined($blacklist{"$src[0]"}) || defined($blacklist{"$src[1]"}));
-    next if $filterfile && !defined($filter{"$src"});
-    #skip entries not containing real words wither in source or target
-    next if $blacklistfile && (!($src[0]=~/[a-zA-Z]{3,}/) || ($src[1] && !($src[1]=~/[a-zA-Z]{3,}/)) || ($src=~/\&[a-zA-Z]+;/));
-    next if $blacklistfile && (!($trg[0]=~/[a-zA-Z]{3,}/) || ($trg[1] && !($trg[1]=~/[a-zA-Z]{3,}/)) || ($trg=~/\&[a-zA-Z]+;/));
+    #print "matching -$src- -$src[0]- -$src[1]-\n";
     
-    #printf (STDERR "Skip1: $src\n"),
-    next if $count{$src} <  $minfreq; #skip unfrequent phrases
-    #printf (STDERR "Skip2: $src\n"),
-    next if $dcount{$src}/$totdoc> $maxdocfreq; #skip phrases that occurr in too many documents
-    
-    if ($src ne $curphrase){
-        printf KNNFILE "%s" , $src." ||| ".$count{"$src"}."\n";
-        $curphrase=$src;
+    if (($blacklistfile && (defined($blacklist{"$src[0]"}) || ($src[1] && defined($blacklist{"$src[1]"}))) && &msg(1,$src,$trg))
+    ||
+    ($filterfile && !defined($filter{"$src"})  && &msg(2,$src,$trg))
+    ||
+    ($blacklistfile && (!($src[0]=~/[a-zA-Z]{3,}/) || ($src[1] && !($src[1]=~/[a-zA-Z]{3,}/)) || ($src=~/\&[a-zA-Z]+\;/)) && &msg(4,$src,$trg))
+    ||
+    ($blacklistfile && (!($trg[0]=~/[a-zA-Z]{3,}/) || ($trg[1] && !($trg[1]=~/[a-zA-Z]{3,}/)) || ($trg=~/\&[a-zA-Z]+\;/)) && &msg(5,$src,$trg)))
+    {
+        #do nothing
+        
+    }else{
+        #increment number of found translations
+        $count++;
+        #store line to be printed at the end
+        $out=$out.$trg." ||| ".$VEC[$seg]."\n";
     }
-    printf KNNFILE "%s" , $trg." ||| ".$VEC[$seg]."\n";
+    #read next source phrase
+    chop($ln=<PHFILE>);
+    ($newsrc,@rest)=split(/ \|\|\| /,$ln);
     
-}
+    if ($newsrc ne  $src) {
+        if ($count && $count >= $minfreq){
+            printf KNNFILE "%s" , $src." ||| ".$count."\n";
+            printf KNNFILE "%s" , $out;
+        }
+        $out="";$count=0;
+    }
+} while($ln);
+
 close(PHFILE);
 close(KNNFILE);
 
-
-
+#track filtering 
+sub msg(){
+    my($n,$s,$t)=@_;
+    print "skip($n): -$s- -$t-\n" if $debug;
+    return 1;
+}
 
 
 
