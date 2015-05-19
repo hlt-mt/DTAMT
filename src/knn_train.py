@@ -3,8 +3,10 @@ import codecs
 import sys
 import numpy as np
 import joblib
+import os.path
 from sklearn.neighbors import NearestNeighbors
 from collections import Counter
+
 """
 reads the training input file in the format
 
@@ -24,8 +26,8 @@ def main():
     parser.add_argument("training_data", help="path to input training data file.")
     parser.add_argument("-m", "--model", help="path to save the output KNN model.")
     # parser.add_argument("-n", "--n_neighbors", type=int, default=3, help="number of neighbors. Default is 3.")
-    parser.add_argument("-r", "--radius", type=float, default=1.0,
-                        help="radius of the nearest neighbor mode. Default is 1.0.")
+    # parser.add_argument("-r", "--radius", type=float, default=1.0,
+    #                     help="radius of the nearest neighbor mode. Default is 1.0.")
 
     args = parser.parse_args()
 
@@ -95,6 +97,9 @@ def main():
 
     if args.model:
         print "Saving %d models...\n" % len(src_phr_models.keys())
+        model_dir = os.path.dirname(args.model)
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
         d = {"words": src_phr_trans, "models": src_phr_models}
         joblib.dump(d, args.model)
 
