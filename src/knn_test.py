@@ -9,7 +9,7 @@ __author__ = 'jgcdesouza'
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Using the trained model, outputs a list of k-nearest source words. Output is one line per test item with tabs separating different possibilities of neighbors.")
+        description="Using the trained model, outputs a list of k-nearest source words. Input is standard input and translation options are printed in the standard output.")
     parser.add_argument("model", help="path to the model in binary format.")
     # parser.add_argument("test_data", help="path to the test data.")
 
